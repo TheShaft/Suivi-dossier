@@ -99,6 +99,7 @@ button:active{opacity:.8}
 @media (pointer:coarse){.cpy{width:36px;height:36px}}
 .sh-chk{display:flex;align-items:flex-start;gap:10px;font-size:14px;margin:2px 0 12px;cursor:pointer}
 .sh-chk input{flex:none;width:20px;height:20px;margin-top:1px}
+.sh-ok+.sh-chk{margin-top:12px}
 .bad{border-color:var(--danger)!important;color:var(--danger)}
 .bar{flex-wrap:wrap;display:flex;justify-content:space-between;align-items:center;margin:2px 0 10px;font-size:13px;color:var(--muted);gap:6px 12px}
 .bar label{display:flex;gap:8px;align-items:center;cursor:pointer}
@@ -1034,16 +1035,35 @@ function sauvegarder(type){
   while(a.length>SV_MAX)a.shift();
   return svEcrire(a);
 }
-function svAuto(){var a=svListe(),last=a.length?a[a.length-1].t:0;if(Date.now()-last>=SV_INT)sauvegarder("auto");}
+function svAuto(){var a=svListe(),last=a.length?a[a.length-1].t:0;if(Date.now()-last>=SV_INT&&sauvegarder("auto")&&svFichierAuto()){var x=svListe().pop();dlSauvegarde(x).catch(function(){});}}
+/* Fichiers téléchargés : nom daté, enregistré dans Téléchargements (PC) ou Fichiers (iPhone) */
+function svFichierAuto(){try{return localStorage.getItem("suivi-sv-fichier")!=="0";}catch(e){return true;}}
+function svNom(t){var d=new Date(t),p=function(n){return(n<10?"0":"")+n;};return "suivi-dossiers_"+d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"_"+p(d.getHours())+"h"+p(d.getMinutes())+".json";}
+function dlFichier(data,nom){
+  function lien(){return new Promise(function(res,rej){try{var u=URL.createObjectURL(new Blob([data],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=nom;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);res(true);}catch(e){rej(e);}});}
+  if(window.claude&&window.claude.use){
+    return window.claude.use("downloads").then(function(dl){if(!dl)throw {code:"unavailable"};return dl.save({filename:nom,data:data}).then(function(){return true;});});
+  }
+  return lien();
+}
+function dlSauvegarde(x){return dlFichier(x.data,svNom(x.t));}
+function dlErreur(e){var c=e&&e.code;if(c==="declined")return;toast(c==="unavailable"||c==="not_granted"?"Téléchargement indisponible ici":"Téléchargement impossible");}
 function svDate(t){var d=new Date(t);return d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
 function outils(){
   sheet("Sauvegarde",function(b){
     var data=JSON.stringify(etat);
     /* --- sauvegardes automatiques --- */
-    b.appendChild(el("p","sh-p","Une sauvegarde est faite toutes les 2 heures quand l’app est ouverte (seulement si quelque chose a changé). Les 5 plus récentes sont gardées sur cet appareil ; la plus ancienne est supprimée à la 6e. Les photos ne sont pas incluses."));
+    b.appendChild(el("p","sh-p","Une sauvegarde est faite toutes les 2 heures quand l’app est ouverte (seulement si quelque chose a changé), ou quand tu appuies ci-dessous. Chacune est téléchargée en fichier (.json, dans Téléchargements sur PC, dans Fichiers sur iPhone). Les 5 plus récentes restent aussi listées ici ; les anciens fichiers téléchargés sont à supprimer toi-même. Les photos ne sont pas incluses."));
     var now=el("button","add sh-ok","Sauvegarder maintenant");now.type="button";
-    now.onclick=function(){if(sauvegarder("manuelle")){outils();toast("Sauvegarde faite");}else toast("Sauvegarde impossible : stockage de l’appareil plein");};
+    now.onclick=function(){
+      if(!sauvegarder("manuelle")){toast("Sauvegarde impossible : stockage de l’appareil plein");return;}
+      var x=svListe().pop();outils();
+      dlSauvegarde(x).then(function(){toast("Sauvegarde faite et téléchargée");},dlErreur);
+    };
     b.appendChild(now);
+    var al=el("label","sh-chk"),ac=document.createElement("input");ac.type="checkbox";ac.checked=svFichierAuto();
+    ac.onchange=function(){try{localStorage.setItem("suivi-sv-fichier",ac.checked?"1":"0");}catch(e){}};
+    al.appendChild(ac);al.appendChild(el("span","","Télécharger aussi un fichier à chaque sauvegarde automatique"));b.appendChild(al);
     var lst=svListe().slice().reverse(),box=el("div","svl");
     if(!lst.length)box.appendChild(el("p","sh-p","Aucune sauvegarde pour l’instant."));
     lst.forEach(function(x){
@@ -1060,10 +1080,32 @@ function outils(){
         try{localStorage.setItem(KEY,x.data);}catch(e){}
         location.reload();
       };
-      r.appendChild(rb);box.appendChild(r);
+      var db=el("button","dx dt","Fichier");db.type="button";db.title="Télécharger ce fichier";
+      db.onclick=function(){dlSauvegarde(x).then(function(){toast("Fichier téléchargé");},dlErreur);};
+      r.appendChild(db);r.appendChild(rb);box.appendChild(r);
     });
     b.appendChild(box);
     if(lst.length)b.appendChild(el("p","sh-p svn","« Restaurer » remplace les dossiers actuels"+(SY.actif()?", y compris sur tes autres appareils":"")+". L’état actuel est d’abord sauvegardé, tu peux donc revenir en arrière."));
+    /* --- restaurer depuis un fichier téléchargé --- */
+    b.appendChild(el("hr","sh-sep"));
+    b.appendChild(el("p","sh-p","Restaurer depuis un fichier de sauvegarde (.json) téléchargé auparavant."));
+    var fi=document.createElement("input");fi.type="file";fi.accept=".json,application/json";fi.hidden=true;
+    var fb=el("button","pbtn sh-alt sh-ok","Choisir un fichier…");fb.type="button";fb.onclick=function(){fi.click();};
+    var fm=el("p","sh-err"),fd=null,fr=el("button","pbtn sh-ok","Restaurer ce fichier");fr.type="button";fr.hidden=true;
+    fi.onchange=function(){
+      var f=fi.files&&fi.files[0];fd=null;fr.hidden=true;fm.textContent="";if(!f)return;
+      var rd=new FileReader();rd.onload=function(){
+        var d=null;try{d=JSON.parse(rd.result);}catch(e){}
+        if(!d||!Array.isArray(d.dossiers)){fm.textContent="Ce fichier n’est pas une sauvegarde valide.";return;}
+        fd=rd.result;fm.textContent="";fr.hidden=false;fr.textContent="Restaurer « "+f.name+" » ("+d.dossiers.length+" dossier"+(d.dossiers.length>1?"s":"")+")";
+      };rd.readAsText(f);
+    };
+    var farm=false;fr.onclick=function(){
+      if(!fd)return;
+      if(!farm){farm=true;fr.textContent="Confirmer : remplacer les "+etat.dossiers.length+" dossiers actuels";return;}
+      sauvegarder("avant");try{localStorage.setItem(KEY,fd);}catch(e){}location.reload();
+    };
+    b.appendChild(fi);b.appendChild(fb);b.appendChild(fm);b.appendChild(fr);
     b.appendChild(el("hr","sh-sep"));
     b.appendChild(el("p","sh-p","Copier une sauvegarde (pour la garder ailleurs : Notes, mail…)."));
     var ta=el("textarea","sh-ta");ta.readOnly=true;ta.rows=3;ta.value=data;b.appendChild(ta);

@@ -1047,7 +1047,7 @@ function dlFichier(data,nom){
   return lien();
 }
 function dlSauvegarde(x){return dlFichier(x.data,svNom(x.t));}
-function dlErreur(e){var c=e&&e.code;if(c==="declined")return;toast(c==="unavailable"||c==="not_granted"?"Téléchargement indisponible ici":"Téléchargement impossible");}
+function dlErreur(e){var c=e&&e.code;if(c==="declined")return;toast(c==="unavailable"||c==="not_granted"?"Téléchargement bloqué dans cette vue de Claude : la sauvegarde est gardée dans la liste. Ouvre le site (GitHub Pages) pour avoir les fichiers.":"Téléchargement impossible ("+(c||"erreur")+")",null,null,9000);}
 function svDate(t){var d=new Date(t);return d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
 function outils(){
   sheet("Sauvegarde",function(b){

@@ -1,5 +1,5 @@
 /* Service worker : l'app démarre aussi hors connexion. Incrémenter V pour forcer une mise à jour. */
-var V="suivi-v4";
+var V="suivi-v5";
 var FICHIERS=["./","index.html","firebase-config.js","fb-sdk.js","cloud.js","manifest.webmanifest","icon-192.png","icon-512.png","icon-512-maskable.png","apple-touch-icon.png"];
 self.addEventListener("install",function(e){
   e.waitUntil(caches.open(V).then(function(c){return Promise.all(FICHIERS.map(function(f){return c.add(f).catch(function(){});}));}).then(function(){return self.skipWaiting();}));

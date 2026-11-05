@@ -1042,7 +1042,8 @@ function svNom(t){var d=new Date(t),p=function(n){return(n<10?"0":"")+n;};return
 function dlFichier(data,nom){
   function lien(){return new Promise(function(res,rej){try{var u=URL.createObjectURL(new Blob([data],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=nom;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);res(true);}catch(e){rej(e);}});}
   if(window.claude&&window.claude.use){
-    return window.claude.use("downloads").then(function(dl){if(!dl)throw {code:"unavailable"};return dl.save({filename:nom,data:data}).then(function(){return true;});});
+    /* sur le site, window.claude est imité par cloud.js sans « downloads » : on télécharge alors normalement */
+    return Promise.resolve(window.claude.use("downloads")).then(function(dl){if(!dl)return lien();return dl.save({filename:nom,data:data}).then(function(){return true;});});
   }
   return lien();
 }

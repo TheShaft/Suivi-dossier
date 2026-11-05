@@ -68,6 +68,12 @@ button:active{opacity:.8}
 .add,.pbtn{background:var(--accent);color:var(--accent-t);height:42px;padding:0 16px;font-weight:600}
 .add:hover,.pbtn:hover{opacity:.92}
 .pbtn{margin-bottom:8px}
+.svl{display:flex;flex-direction:column;margin:6px 0 4px}
+.svr{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.svr:first-child{border-top:0}
+.svm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.svm span{color:var(--muted);font-size:13px}
+.svn{font-size:13px}
 .pbtn.sh-alt{background:var(--card);color:var(--text);border:1px solid var(--line2)}
 .pbtn.sh-alt:active{background:var(--hover)}
 .lk{background:none;color:var(--accent);font-size:14px;font-weight:600;padding:6px 8px;border-radius:6px}
@@ -1017,10 +1023,49 @@ function nouveauDossier(){
     setTimeout(function(){i.focus();},60);
   });
 }
+/* ===== Sauvegardes automatiques : toutes les 2 h (si quelque chose a changé) ou sur demande ; les 5 plus récentes sont gardées sur l'appareil ===== */
+var KSV="suivi-sauvegardes",SV_MAX=5,SV_INT=2*3600e3;
+function svListe(){try{var a=JSON.parse(localStorage.getItem(KSV));return Array.isArray(a)?a.filter(function(x){return x&&x.data;}):[];}catch(e){return [];}}
+function svEcrire(a){while(a.length){try{localStorage.setItem(KSV,JSON.stringify(a));return true;}catch(e){if(a.length<=1)return false;a.shift();}}try{localStorage.setItem(KSV,"[]");}catch(e){}return false;}
+function sauvegarder(type){
+  var data=JSON.stringify(etat),a=svListe();
+  if(type==="auto"&&a.length&&a[a.length-1].data===data)return false;
+  a.push({t:Date.now(),type:type,n:etat.dossiers.length,data:data});
+  while(a.length>SV_MAX)a.shift();
+  return svEcrire(a);
+}
+function svAuto(){var a=svListe(),last=a.length?a[a.length-1].t:0;if(Date.now()-last>=SV_INT)sauvegarder("auto");}
+function svDate(t){var d=new Date(t);return d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
 function outils(){
   sheet("Sauvegarde",function(b){
     var data=JSON.stringify(etat);
-    b.appendChild(el("p","sh-p",(SY.actif()?"Tes dossiers sont synchronisés entre tes appareils (icône nuage) et gardés aussi sur celui-ci. ":"Tes données sont enregistrées uniquement sur cet appareil. ")+"Tu peux en plus copier une sauvegarde et la garder (Notes, mail…). Les photos ne sont pas incluses."));
+    /* --- sauvegardes automatiques --- */
+    b.appendChild(el("p","sh-p","Une sauvegarde est faite toutes les 2 heures quand l’app est ouverte (seulement si quelque chose a changé). Les 5 plus récentes sont gardées sur cet appareil ; la plus ancienne est supprimée à la 6e. Les photos ne sont pas incluses."));
+    var now=el("button","add sh-ok","Sauvegarder maintenant");now.type="button";
+    now.onclick=function(){if(sauvegarder("manuelle")){outils();toast("Sauvegarde faite");}else toast("Sauvegarde impossible : stockage de l’appareil plein");};
+    b.appendChild(now);
+    var lst=svListe().slice().reverse(),box=el("div","svl");
+    if(!lst.length)box.appendChild(el("p","sh-p","Aucune sauvegarde pour l’instant."));
+    lst.forEach(function(x){
+      var r=el("div","svr"),m=el("div","svm");
+      m.appendChild(el("b","",svDate(x.t)));
+      m.appendChild(el("span","",(x.type==="auto"?"automatique":x.type==="avant"?"avant restauration":"manuelle")+" · "+x.n+" dossier"+(x.n>1?"s":"")));
+      r.appendChild(m);
+      var rb=el("button","dx dt","Restaurer");rb.type="button";var arm=false;
+      rb.onclick=function(){
+        if(!arm){arm=true;rb.textContent="Confirmer";rb.classList.add("on");setTimeout(function(){arm=false;rb.textContent="Restaurer";rb.classList.remove("on");},4000);return;}
+        var d=null;try{d=JSON.parse(x.data);}catch(e){}
+        if(!d||!Array.isArray(d.dossiers)){toast("Sauvegarde illisible");return;}
+        sauvegarder("avant");
+        try{localStorage.setItem(KEY,x.data);}catch(e){}
+        location.reload();
+      };
+      r.appendChild(rb);box.appendChild(r);
+    });
+    b.appendChild(box);
+    if(lst.length)b.appendChild(el("p","sh-p svn","« Restaurer » remplace les dossiers actuels"+(SY.actif()?", y compris sur tes autres appareils":"")+". L’état actuel est d’abord sauvegardé, tu peux donc revenir en arrière."));
+    b.appendChild(el("hr","sh-sep"));
+    b.appendChild(el("p","sh-p","Copier une sauvegarde (pour la garder ailleurs : Notes, mail…)."));
     var ta=el("textarea","sh-ta");ta.readOnly=true;ta.rows=3;ta.value=data;b.appendChild(ta);
     var cp=el("button","add sh-ok","Copier la sauvegarde");cp.type="button";
     cp.onclick=function(){
@@ -1958,6 +2003,7 @@ var SY=(function(){
   return {start:start,repeindre:paint,dirty:dirty,photosDirty:photosDirty,photoDel:photoDel,distantes:distantes,grille:grille,feuille:feuille,actif:function(){return !!S.linked;},etat:function(){return etS;}};
 })();
 charger();etat.dossiers.forEach(function(d){if(d.nom==="LAN600309"&&!d.type)d.type="TRVX GC";});trs.value=etat.tri||"urg";sauver();render();renderH();
+setTimeout(svAuto,3000);setInterval(svAuto,5*60e3);document.addEventListener("visibilitychange",function(){if(!document.hidden)svAuto();});
 SY.start();
 var courant=0,posScroll={0:0,1:0,2:0,4:0};
 function onglet(n){

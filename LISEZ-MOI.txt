@@ -1,0 +1,31 @@
+SUIVI DES DOSSIERS - site autonome (hors Claude)
+=================================================
+
+Ce dossier est un site complet. Pour le mettre en ligne et synchroniser PC + iPhone :
+
+1. Crée un projet Firebase (gratuit), active la connexion par e-mail, crée la base Firestore
+   et colle les règles de sécurité.
+2. Ouvre firebase-config.js et remplace chaque COLLE_ICI par les réglages de ton projet.
+3. Glisse ce dossier entier sur app.netlify.com (Add new site > Deploy manually).
+4. Ouvre l'adresse obtenue : crée ton compte (e-mail + mot de passe) sur le PC,
+   puis connecte-toi avec les mêmes identifiants sur l'iPhone
+   (Safari > Partager > Sur l'écran d'accueil).
+
+Le guide détaillé, étape par étape (avec le texte des règles à coller), est dans le document
+« Guide - Mettre le suivi des dossiers en ligne (hors Claude) ».
+
+Règles Firestore à coller (Firestore Database > Règles > Publier) :
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+
+Fichiers : index.html (l'application), firebase-config.js (tes réglages),
+cloud.js et fb-sdk.js (connexion et synchronisation), sw.js (fonctionnement hors connexion),
+manifest.webmanifest et icônes (installation sur l'écran d'accueil).
+Le SDK Firebase est chargé depuis le serveur de Google la première fois (internet requis une fois).

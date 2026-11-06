@@ -1261,16 +1261,24 @@ function echeances(d,auj){
     add("Prise de RDV conseil","3 j après la création du dossier"+(prExc&&d.prRaison?" · retard client : "+d.prRaison:""),dc,3,prFait||prExc,false,parse(d.dpr));
     var prx=out[out.length-1];prx.pr=true;prx.excuse=prExc;
   }
-  if(!masque(tk(d),0,0))add("RDV","6 j après la création du dossier",dc,6,fait(d,0,0),false,dateEtape(d,0,0));
+  /* retard client sur la prise de RDV : RDV, Conseil / Étude GC et APD sont recalés sur la date du RDV
+     (mêmes écarts qu'au départ : RDV = jour J, Conseil = J+9, APD = J+24 jours ouvrés) au lieu de la création */
+  var rc=!masque(tk(d),0,0)&&!!d.prClient,bR=rc?dr:dc,oR=rc?0:6,oC=rc?9:15,oA=rc?24:30,sR=rc?" (recalé sur le RDV : retard client)":"";
+  if(!masque(tk(d),0,0))add("RDV",rc?(dr?"date du RDV"+sR:"en attente de la date du RDV (retard client)"):"6 j après la création du dossier",bR,oR,fait(d,0,0),false,dateEtape(d,0,0));
   if(!masque(tk(d),0,1))add("CRVT 1","3 j après le RDV",dr,3,fait(d,0,1),false,dateEtape(d,0,1));
   if(!masque(tk(d),1,0))add("DT","3 j après le RDV",dr,3,fait(d,1,0),false,dateEtape(d,1,0));
   if(!masque(tk(d),1,2))add("Envoi PV","3 j après le RDV",dr,3,fait(d,1,2),false,dateEtape(d,1,2));
   /* relance PV : 15 j après l'envoi (demande initiale) ; faite si « Relance » ou « PV reçu » est cochée */
   if(!masque(tk(d),1,3)&&fait(d,1,2)){var dEnv=dateEtape(d,1,2);if(dEnv)add("Relance PV","15 j après l’envoi du PV",dEnv,15,fait(d,1,3)||(!masque(tk(d),1,5)&&fait(d,1,5)),false,dateEtape(d,1,3));}
   var gc=groupeFait(d,0),ge=groupeFait(d,1);
-  if(gc!==null||ge!==null)add(ge===null?"Conseil":"Conseil + Étude GC","15 j après la création du dossier",dc,15,gc!==false&&ge!==false,false,dateGroupes(d,[0,1]));
+  if(gc!==null||ge!==null)add(ge===null?"Conseil":"Conseil + Étude GC",rc?(dr?"9 j après le RDV"+sR:"en attente de la date du RDV (retard client)"):"15 j après la création du dossier",bR,oC,gc!==false&&ge!==false,false,dateGroupes(d,[0,1]));
   var ga=groupeFait(d,3);
-  if(ga!==null)add("APD","30 j après la création du dossier",dc,30,ga===true,true,dateGroupes(d,[3]));
+  /* APD : validé quand toutes ses étapes sont cochées, ou dès qu'une date « APD fait le » est saisie ; pas de retard si la cause est le client */
+  if(ga!==null){
+    var apdExc=!!d.apdClient;
+    add("APD",(rc?(dr?"24 j après le RDV"+sR:"en attente de la date du RDV (retard client)"):"30 j après la création du dossier")+(apdExc&&d.apdRaison?" · retard client : "+d.apdRaison:""),bR,oA,ga===true||!!d.dapd||apdExc,true,parse(d.dapd)||dateGroupes(d,[3]));
+    var ax=out[out.length-1];ax.excuse=apdExc;ax.apdx=true;
+  }
   var drs=parse(d.drdvSuivi),drr=parse(d.drdvRecep);
   if(drs&&!masque(tk(d),4,2))add("CRVT 2","3 j après le RDV suivi",drs,3,fait(d,4,2),false,dateEtape(d,4,2));
   if(drr&&!masque(tk(d),8,1))add("CRVT 3","3 j après le RDV réception",drr,3,fait(d,8,1),false,dateEtape(d,8,1));
@@ -1383,6 +1391,7 @@ function pillSummary(sp,r){
   else if(r.miss){sp.textContent="dates à saisir";}
   else{sp.className="pill ok";sp.textContent="✓ à jour";}
 }
+var FOCUSAPD=null;
 function remplirEch(b,d,r){
   b.innerHTML="";
   if(!r.es.length)b.appendChild(el("div","fini","Aucune échéance pour ce type de dossier."));
@@ -1427,15 +1436,24 @@ function remplirEch(b,d,r){
         if(FOCUSPR===d.id&&d.prClient){FOCUSPR=null;setTimeout(function(){prs.focus();},60);}
       }
     }
-    if(x.apd&&!x.done&&x.n!==null&&x.n<0){
-      var ab=el("div","apd");
-      ab.appendChild(el("div","g","APD dépassé : raison et relance"));
+    if(x.apdx){
+      var aret=(x.dt&&x.lim&&iso(x.dt)>iso(x.lim))?ecartJO(x.lim,x.dt):0;
+      var ab=el("div","apd"+((d.apdClient||(!x.done&&x.n!==null&&x.n<0)||aret>0)?"":" calm"));
+      ab.appendChild(el("div","g","APD : date et retard dû au client ?"));
+      var aw=el("div","dates");
+      aw.appendChild(dateField("APD fait le",d.dapd,function(v){if(v)d.dapd=v;else delete d.dapd;sauver();majCarte(d);}));
+      ab.appendChild(aw);
+      var asl=document.createElement("select");asl.className="note";
+      [["","Retard client : non"],["oui","Oui : retard client"]].forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];asl.appendChild(op);});
+      asl.value=d.apdClient?"oui":"";
       var rs=el("input","note");rs.type="text";rs.value=d.apdRaison||"";rs.placeholder="Raison du retard APD";
-      rs.onchange=function(){d.apdRaison=rs.value;sauver();};
-      ab.appendChild(rs);
-      var w2=el("div","dates");
-      w2.appendChild(dateField("Relance le",d.apdRelance,function(v){d.apdRelance=v;sauver();}));
-      ab.appendChild(w2);b.appendChild(ab);
+      rs.hidden=!(d.apdClient||(!x.done&&x.n!==null&&x.n<0));
+      asl.onchange=function(){if(asl.value==="oui"){d.apdClient=true;FOCUSAPD=d.id;}else delete d.apdClient;sauver();majCarte(d);};
+      rs.onchange=function(){d.apdRaison=rs.value.trim();sauver();};
+      ab.appendChild(asl);ab.appendChild(rs);
+      if(!x.done&&x.n!==null&&x.n<0){var w2=el("div","dates");w2.appendChild(dateField("Relance le",d.apdRelance,function(v){d.apdRelance=v;sauver();}));ab.appendChild(w2);}
+      b.appendChild(ab);
+      if(FOCUSAPD===d.id&&d.apdClient){FOCUSAPD=null;setTimeout(function(){rs.focus();},60);}
     }
   });
 }

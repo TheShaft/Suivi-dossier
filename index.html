@@ -1582,12 +1582,13 @@ function render(){
     ts.value=d.type||"";ts.onchange=function(){d.type=ts.value;sauver();render();};
     inf.appendChild(ts);
     if(d.type==="RAMI"){
+      /* RAMI : un seul menu pour le GC (au droit du terrain oui / non, ou pas de GC du tout) */
       var gs=document.createElement("select");gs.className="note";
-      [["","GC au droit du terrain : à préciser"],["oui","GC au droit du terrain : oui"],["non","GC au droit du terrain : non"]].forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];gs.appendChild(op);});
-      gs.value=d.gcDroit||"";gs.onchange=function(){d.gcDroit=gs.value;sauver();render();};
+      [["","GC : à préciser"],["oui","GC au droit du terrain : oui"],["non","GC au droit du terrain : non"],["pasgc","Pas de GC"]].forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];gs.appendChild(op);});
+      gs.value=d.pasGC?"pasgc":(d.gcDroit||"");
+      gs.onchange=function(){if(gs.value==="pasgc"){d.pasGC=true;delete d.gcDroit;}else{delete d.pasGC;d.gcDroit=gs.value;}sauver();render();};
       inf.appendChild(gs);
-    }
-    if(d.type&&d.type!=="TRVX GC"){
+    }else if(d.type&&d.type!=="TRVX GC"){
       var pg=document.createElement("select");pg.className="note";
       [["","GC : prévu"],["non","Pas de GC"]].forEach(function(o){var op=document.createElement("option");op.value=o[0];op.textContent=o[1];pg.appendChild(op);});
       pg.value=d.pasGC?"non":"";pg.onchange=function(){if(pg.value==="non")d.pasGC=true;else delete d.pasGC;sauver();render();};

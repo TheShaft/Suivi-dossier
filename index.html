@@ -1364,7 +1364,8 @@ function listeD(auj){
     if(ftype&&d.type!==ftype)return;
     if(fphase&&phaseEnCours(d)!==fphase)return;
     var r=calcRow(d,auj);
-    if(!r.ouvert&&!r.prem)return;
+    /* on ne masque que les dossiers entièrement terminés : un dossier « à jour » reste listé pour saisir ses prochaines dates */
+    if(!r.ouvert&&!r.prem&&restant(d)===0)return;
     cnt.tout++;if(r.late)cnt.late++;if(r.td)cnt.td++;if(r.venir)cnt.venir++;if(r.miss)cnt.miss++;if(r.rap)cnt.rap++;
     var ok=FD.sit==="tout"||(FD.sit==="late"&&r.late>0)||(FD.sit==="td"&&r.td>0)||(FD.sit==="venir"&&r.venir>0)||(FD.sit==="miss"&&r.miss)||(FD.sit==="rap"&&r.rap);
     if(!ok&&!r.prem)return;

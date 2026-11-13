@@ -231,6 +231,17 @@ summary>.pill{grid-area:st;justify-self:end}
 .lienpc .g{margin:10px 0 8px}
 .lienpc input{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:13px}
 .lienpc .add{flex:none;white-space:nowrap;padding:0 14px}
+.met-q{font-size:16px;font-weight:650;color:var(--text);margin:0 0 4px}
+.met-c{display:flex;flex-direction:column;gap:4px;margin:12px 0 6px}
+.met-c label{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 12px;border:1px solid var(--line);border-radius:var(--rc);cursor:pointer;font-size:15px;transition:opacity .2s,border-color .15s,background .15s}
+.met-c label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.met-c label.off{opacity:.5;cursor:not-allowed}
+.met-c input{width:22px;height:22px}
+.met-t{font-size:13px;color:var(--muted);min-height:18px;margin:0 0 10px;font-variant-numeric:tabular-nums}
+.met-r{display:flex;gap:8px}
+.met-r .sh-ok{flex:1}
+.met-r .pbtn.sh-alt{flex:none;width:auto;padding:0 18px}
+.add:disabled{opacity:.45;cursor:not-allowed;filter:none;box-shadow:none}
 /* ---------- onglet Dates ---------- */
 .dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 6px}
 #vue2 .dates{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -307,7 +318,7 @@ a.dx{display:inline-flex;align-items:center;justify-content:center;text-decorati
 #toast button{color:var(--text);background:var(--bg);padding:0 12px;height:32px;border-radius:9px;font-weight:650;font-size:13px;flex:none}
 
 /* ---------- fenêtres ---------- */
-.sheet{position:fixed;inset:0;z-index:70}
+.sheet{position:fixed;inset:0;z-index:85}
 .sh-bg{position:absolute;inset:0;background:rgba(10,11,26,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:fon .2s ease}
 @keyframes fon{from{opacity:0}}
 @keyframes up{from{transform:translateY(24px);opacity:0}}
@@ -901,6 +912,9 @@ function actRow(a,aj,apres){
       var ac=el("div","aa");
       if(a.btn){var b1=el("button","dx dt on",a.btn);b1.type="button";b1.onclick=function(){a.fn();apres();toast("Fait · "+a.d.nom);};ac.appendChild(b1);}
       if(a.cocher){var bc=el("button","dx dt on","✓ Cocher");bc.type="button";bc.onclick=function(){
+        if(etapeMET(a.cocher)){confirmerMET(a.d,a.cocher,cocherAct);return;}
+        cocherAct();};
+        var cocherAct=function(){
         var pk=a.cocher,pdt=(a.d.dates||{})[pk];a.d.done[pk]=true;a.d.dates=a.d.dates||{};if(!RDVF[pk])a.d.dates[pk]=aj;sauver();apres();
         toast("Étape cochée · "+a.d.nom,"Annuler",function(){a.d.done[pk]=false;if(pdt)a.d.dates[pk]=pdt;else delete a.d.dates[pk];sauver();apres();},5000);};ac.appendChild(bc);}
       var b2=el("button","dx dt",a.cible===2?"Ouvrir les dates":"Ouvrir le dossier");b2.type="button";b2.onclick=function(){ouvrirDossier(a.d.id,a.cible);};ac.appendChild(b2);
@@ -1132,6 +1146,37 @@ function infoVolet(d){
   if(nx){p.appendChild(document.createTextNode("Prochaine étape : "));p.appendChild(el("b","",nx.l));p.title=nx.sec+" · "+nx.l;}
   else p.textContent="Toutes les étapes sont faites";
   m.appendChild(p);w.appendChild(m);return w;
+}
+/* ===== Vérification MET : obligatoire pour cocher CRVT 1/2/3 et les transmissions ===== */
+var ETAPES_MET=["CRVT 1","CRVT 2","CRVT 3","Transmission étude GC","Transmission APD","Transmission DOE","Transmission DOE RAR"];
+function etapeMET(k){var p=String(k).split("-"),g=G[+p[0]];return !!(g&&ETAPES_MET.indexOf(g[1][+p[1]])>=0);}
+/* ouvre la fenêtre ; ok() n'est appelé que si les deux cases sont cochées puis « Valider l'étape » */
+function confirmerMET(d,k,ok){
+  var p=String(k).split("-"),lib=G[+p[0]][1][+p[1]];
+  sheet(lib+" · "+d.nom,function(b){
+    b.appendChild(el("p","met-q","As-tu été sur MET et mis ton COML via MET ?"));
+    var box=el("div","met-c"),cbs=[];
+    ["J’ai été sur MET","J’ai mis mon COML via MET"].forEach(function(t){
+      var l=el("label","off"),c=document.createElement("input");c.type="checkbox";c.disabled=true;
+      l.appendChild(c);l.appendChild(el("span","",t));box.appendChild(l);cbs.push({l:l,c:c});
+    });
+    b.appendChild(box);
+    var info=el("p","met-t");b.appendChild(info);
+    var r=el("div","met-r"),an=el("button","pbtn sh-alt sh-ok","Annuler"),va=el("button","add sh-ok","Valider l’étape");an.type="button";va.type="button";va.disabled=true;
+    an.onclick=fermerSheet;
+    function maj(){va.disabled=!cbs.every(function(x){return x.c.checked;});}
+    cbs.forEach(function(x){x.c.onchange=maj;});
+    va.onclick=function(){if(va.disabled)return;fermerSheet();ok();};
+    r.appendChild(an);r.appendChild(va);b.appendChild(r);
+    var n=3;info.textContent="Les cases se débloquent dans "+n+" s…";
+    var tm=setInterval(function(){
+      if(!document.body.contains(info)){clearInterval(tm);return;}
+      n--;
+      if(n>0){info.textContent="Les cases se débloquent dans "+n+" s…";return;}
+      clearInterval(tm);info.textContent="Coche les deux cases pour valider l’étape.";
+      cbs.forEach(function(x){x.c.disabled=false;x.l.classList.remove("off");});
+    },1000);
+  });
 }
 /* Petit bouton « copier » placé à côté du code, dans l'en-tête d'une carte (ne replie / ne déplie pas la carte) */
 function btnCopie(d){
@@ -1873,7 +1918,11 @@ function render(){
         var f=fait(d,it[3],it[2]),auto=(it[3]===1&&it[2]===4&&d.pv==="simple");
         var lab=el("label","item"+(f?" checked":""));
         var cb=document.createElement("input");cb.type="checkbox";cb.checked=f;cb.disabled=auto;
-        cb.onchange=function(){var pk=it[0],pd=!cb.checked,pdt=(d.dates||{})[pk];toast(cb.checked?"Étape cochée":"Étape décochée","Annuler",function(){d.done[pk]=pd;d.dates=d.dates||{};if(pdt)d.dates[pk]=pdt;else delete d.dates[pk];sauver();render();},5000);d.done[it[0]]=cb.checked;d.dates=d.dates||{};if(cb.checked){if(!RDVF[it[0]])d.dates[it[0]]=iso(aujourdhui());}else delete d.dates[it[0]];sauver();if(cb.checked&&!etat.voir){lab.classList.add("sortie");setTimeout(render,230);}else render();};
+        cb.onchange=function(){
+          if(cb.checked&&etapeMET(it[0])){cb.checked=false;confirmerMET(d,it[0],function(){cb.checked=true;appliquer();});return;}
+          appliquer();
+        };
+        var appliquer=function(){var pk=it[0],pd=!cb.checked,pdt=(d.dates||{})[pk];toast(cb.checked?"Étape cochée":"Étape décochée","Annuler",function(){d.done[pk]=pd;d.dates=d.dates||{};if(pdt)d.dates[pk]=pdt;else delete d.dates[pk];sauver();render();},5000);d.done[it[0]]=cb.checked;d.dates=d.dates||{};if(cb.checked){if(!RDVF[it[0]])d.dates[it[0]]=iso(aujourdhui());}else delete d.dates[it[0]];sauver();if(cb.checked&&!etat.voir){lab.classList.add("sortie");setTimeout(render,230);}else render();};
         lab.appendChild(cb);lab.appendChild(el("span","",it[1]+(auto?" (auto, PV simple)":"")));
         if(it[3]===1&&it[2]===4&&d.pv==="complexe"){
           var cs=document.createElement("select");cs.className="mini";

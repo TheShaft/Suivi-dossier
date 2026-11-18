@@ -1601,22 +1601,56 @@ function frVersIso(raw){
   var t=new Date(a,m-1,j,12);if(t.getFullYear()!==a||t.getMonth()!==m-1||t.getDate()!==j)return null;
   return a+"-"+p2(m)+"-"+p2(j);
 }
+/* Lecture souple d'une date saisie :
+   « 0207 » ou « 2/7 » -> 02/07/année en cours ; « 020726 » ou « 2/7/26 » -> 02/07/2026 ; « 02072026 » -> 02/07/2026 */
+function frSouple(raw){
+  var t=String(raw||"").trim();if(!t)return "";
+  var j,m,a,an=aujourdhui().getFullYear();
+  if(/\D/.test(t)){
+    var p=t.split(/\D+/).filter(Boolean);if(p.length<2||p.length>3)return null;
+    j=p[0];m=p[1];a=p[2];
+  }else{
+    if(t.length===4){j=t.slice(0,2);m=t.slice(2);}
+    else if(t.length===6){j=t.slice(0,2);m=t.slice(2,4);a=t.slice(4);}
+    else if(t.length===8){j=t.slice(0,2);m=t.slice(2,4);a=t.slice(4);}
+    else return null;
+  }
+  j=+j;m=+m;
+  if(a===undefined||a==="")a=an;else if(String(a).length<=2)a=2000+(+a);else if(String(a).length===4)a=+a;else return null;
+  if(a<2000||a>2100||m<1||m>12||j<1||j>31)return null;
+  var d=new Date(a,m-1,j,12);if(d.getFullYear()!==a||d.getMonth()!==m-1||d.getDate()!==j)return null;
+  return iso(d);
+}
 function dateInput(val,onSet){
   var wrap=el("span","dwrap"),inp=document.createElement("input"),au=el("button","dx dt","Auj."),x=el("button","dx","✕"),last=val||"";
   inp.type="text";inp.className="dinp";inp.setAttribute("inputmode","numeric");inp.setAttribute("autocomplete","off");inp.setAttribute("maxlength","10");
-  inp.placeholder="jj/mm/aaaa";inp.value=isoVersFr(val);inp.setAttribute("aria-label","Date (jour mois année)");
+  inp.placeholder="jj/mm/aaaa";inp.value=isoVersFr(val);inp.setAttribute("aria-label","Date (jour mois année) : 0207 = 02/07 de l’année en cours");
+  inp.title="Astuce : 0207 donne le 02/07 de l’année en cours";
   au.type="button";au.title="Mettre la date du jour";
   x.type="button";x.title="Effacer la date";x.setAttribute("aria-label","Effacer la date");x.hidden=!val;
   function commit(v){if(v===last)return;last=v;x.hidden=!v;onSet(v);}
-  inp.addEventListener("input",function(){
-    inp.value=formatFr(inp.value);
+  /* validation : à la sortie du champ ou avec Entrée */
+  function valider(){
+    var t=inp.value.trim();
+    if(!t){inp.classList.remove("bad");commit("");return true;}
+    var v=frSouple(t);
+    if(v){inp.classList.remove("bad");inp.value=isoVersFr(v);commit(v);return true;}
+    inp.classList.add("bad");return false;
+  }
+  inp.addEventListener("input",function(e){
+    var it=e.inputType||"",pos=inp.selectionStart,fin=pos===inp.value.length;
+    /* mise en forme (ajout des « / ») seulement quand on tape à la fin ; en modification on ne touche à rien */
+    if(it.indexOf("insert")===0&&fin&&!/[^\d\/]/.test(inp.value)){
+      var f=formatFr(inp.value);if(f!==inp.value){inp.value=f;try{inp.setSelectionRange(f.length,f.length);}catch(er){}}
+    }
+    inp.classList.remove("bad");
     var n=inp.value.replace(/\D/g,"").length;
-    if(n===0){inp.classList.remove("bad");commit("");return;}
-    if(n<8){inp.classList.remove("bad");return;}
-    var v=frVersIso(inp.value);
-    if(v){inp.classList.remove("bad");commit(v);}else inp.classList.add("bad");
+    /* champ vidé : la date n'est effacée qu'à la sortie du champ (on peut donc effacer puis retaper) */
+    /* date complète tapée d'un trait : enregistrée tout de suite */
+    if(n===8&&fin){var v=frSouple(inp.value);if(v)commit(v);else inp.classList.add("bad");}
   });
-  inp.addEventListener("blur",function(){inp.classList.remove("bad");inp.value=isoVersFr(last);});
+  inp.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();if(valider())inp.blur();}});
+  inp.addEventListener("blur",function(){if(!valider()){inp.classList.remove("bad");inp.value=isoVersFr(last);toast("Date non reconnue : exemples 0207, 02/07, 02/07/2026",null,null,3500);}});
   au.onclick=function(e){e.preventDefault();e.stopPropagation();var v=iso(aujourdhui());inp.value=isoVersFr(v);inp.classList.remove("bad");commit(v);};
   x.onclick=function(e){e.preventDefault();e.stopPropagation();inp.value="";inp.classList.remove("bad");commit("");};
   wrap.appendChild(inp);wrap.appendChild(au);wrap.appendChild(x);return wrap;
